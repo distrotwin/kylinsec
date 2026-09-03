@@ -30,7 +30,7 @@ jobs:
         did: [v6, v3.4]
         arch: [amd64, arm64]
         tier: [micro, base, devel]
-    uses: distrotwin/buildkit/.github/workflows/build-one.yml@ecf3624d94be4f00375964d5a49682c72affc07c
+    uses: distrotwin/buildkit/.github/workflows/build-one.yml@e1e651889143c7d115e6aa0e29bce24dd2c66659
     with:
       distro-id: ${{ matrix.did }}
       arch:      ${{ matrix.arch }}
@@ -56,7 +56,7 @@ jobs:
       fail-fast: false
       matrix:
         tier: [micro, base, devel]
-    uses: distrotwin/buildkit/.github/workflows/build-one.yml@ecf3624d94be4f00375964d5a49682c72affc07c
+    uses: distrotwin/buildkit/.github/workflows/build-one.yml@e1e651889143c7d115e6aa0e29bce24dd2c66659
     with:
       distro-id:  v6
       arch:       loong64
@@ -81,7 +81,7 @@ jobs:
         did: [v6, v3.4]
         arch: [amd64, arm64]
         tier: [micro, base, devel]
-    uses: distrotwin/buildkit/.github/workflows/test-one.yml@ecf3624d94be4f00375964d5a49682c72affc07c
+    uses: distrotwin/buildkit/.github/workflows/test-one.yml@e1e651889143c7d115e6aa0e29bce24dd2c66659
     with:
       distro-id: ${{ matrix.did }}
       arch:      ${{ matrix.arch }}
@@ -95,7 +95,7 @@ jobs:
       fail-fast: false
       matrix:
         tier: [micro, base, devel]
-    uses: distrotwin/buildkit/.github/workflows/test-one.yml@ecf3624d94be4f00375964d5a49682c72affc07c
+    uses: distrotwin/buildkit/.github/workflows/test-one.yml@e1e651889143c7d115e6aa0e29bce24dd2c66659
     with:
       distro-id:  v6
       arch:       loong64
@@ -110,7 +110,7 @@ jobs:
   report:
     needs: [test, test-loong]
     if: always()
-    uses: distrotwin/buildkit/.github/workflows/report.yml@ecf3624d94be4f00375964d5a49682c72affc07c
+    uses: distrotwin/buildkit/.github/workflows/report.yml@e1e651889143c7d115e6aa0e29bce24dd2c66659
     with:
       distros:  '["v6","v3.4"]'
       expected: ${{ inputs.include-loongarch && 15 || 12 }}
@@ -132,7 +132,7 @@ jobs:
           - { did: v6,   prefix: v6,   tier: base,  latest: false }
           # latest 指向最高版本的 devel
           - { did: v6,   prefix: v6,   tier: devel, latest: true }
-    uses: distrotwin/buildkit/.github/workflows/publish-one.yml@ecf3624d94be4f00375964d5a49682c72affc07c
+    uses: distrotwin/buildkit/.github/workflows/publish-one.yml@e1e651889143c7d115e6aa0e29bce24dd2c66659
     with:
       distro-id:  ${{ matrix.did }}
       tier:       ${{ matrix.tier }}
