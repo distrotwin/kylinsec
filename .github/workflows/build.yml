@@ -1,0 +1,143 @@
+name: 构建镜像
+
+# 下游仓库唯一的 workflow：只定义矩阵、调用 buildkit 的可复用 workflow，
+# 任何实现都不写在这里。改动前先读 buildkit/docs/downstream-repo.md 第四节。
+#
+# 只允许手动触发。一轮要跑二十多个 job、拉几个 GB，提交自动触发既费额度也没必要——
+# 真正需要的是「我要出一批镜像了」这个显式动作。
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "测试全绿后发布到 GHCR（默认不发布）"
+        type: boolean
+        default: false
+      include-loongarch:
+        description: "把 V6 的 loong64 一并构建（新世界 ABI，QEMU 模拟，较慢）"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # ── 原生架构。GitHub 的 amd64 与 arm64 runner 都是原生，不需要模拟
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        did: [v6, v3.4]
+        arch: [amd64, arm64]
+        tier: [micro, base, devel]
+    uses: distrotwin/buildkit/.github/workflows/build-one.yml@caf4911b5a21fde6fa1291b0c186b5e042fe9f49
+    with:
+      distro-id: ${{ matrix.did }}
+      arch:      ${{ matrix.arch }}
+      tier:      ${{ matrix.tier }}
+      runner:    ${{ matrix.arch == 'arm64' && 'ubuntu-22.04-arm' || 'ubuntu-22.04' }}
+
+  # ── LoongArch。没有托管 runner，只能在 amd64 上用 QEMU 模拟。
+  #
+  # 默认开着，因为麒麟信安 V6 的 loong 是**新世界** ABI：实测其 glibc 的 ELF
+  # 解释器为 /lib64/ld-linux-loongarch-lp64d.so.1、依赖里写着
+  # ld-linux-loongarch-lp64d.so.1(GLIBC_2.36)，而旧世界用 /lib64/ld.so.1。
+  # 上游 QEMU 只实现新世界（旧世界还在调 syscall 79/80，上游把它们去掉了），
+  # 所以这一支能在模拟下跑通，不像银河麒麟 V10 SP1 的 loongarch64 那样必须排除。
+  #
+  # 有个命名陷阱要记：rpm 世界里新旧两个世界**都叫 loongarch64**，名字不携带
+  # 世代信息。所以本体系写 ARCH=loong64（对应新世界的期望链接器），
+  # 而 conf 里的 $RPMARCH 会映射成 loongarch64 去拼源地址。
+  #
+  # 只有 V6 在列：V3.4-4A 的源里只有 x86_64 与 aarch64，没有 loong 树。
+  build-loong:
+    if: inputs.include-loongarch
+    strategy:
+      fail-fast: false
+      matrix:
+        tier: [micro, base, devel]
+    uses: distrotwin/buildkit/.github/workflows/build-one.yml@caf4911b5a21fde6fa1291b0c186b5e042fe9f49
+    with:
+      distro-id:  v6
+      arch:       loong64
+      tier:       ${{ matrix.tier }}
+      # 必须 24.04 而不是照惯例取最低版本：LoongArch 的用户态模拟是 QEMU 7.1 才加的，
+      # Ubuntu 22.04 只带 6.2，binfmt 里根本没有 qemu-loongarch64 条目。
+      # 实测报错是「can neither be executed natively nor via qemu user emulation」，
+      # 那句话不提版本，很容易被当成 binfmt 没装。产物与宿主发行版新旧无关。
+      runner:     ubuntu-24.04
+      needs-qemu: true
+      timeout-minutes: 150
+      max-attempts: 2
+
+  # if: always() —— 某个镜像没建出来，其余镜像的测试结论仍然有价值，
+  # 报告要完整而不是一挂全无。缺的那几份由汇总阶段的 expected 抓。
+  test:
+    needs: [build, build-loong]
+    if: always()
+    strategy:
+      fail-fast: false
+      matrix:
+        did: [v6, v3.4]
+        arch: [amd64, arm64]
+        tier: [micro, base, devel]
+    uses: distrotwin/buildkit/.github/workflows/test-one.yml@caf4911b5a21fde6fa1291b0c186b5e042fe9f49
+    with:
+      distro-id: ${{ matrix.did }}
+      arch:      ${{ matrix.arch }}
+      tier:      ${{ matrix.tier }}
+      runner:    ${{ matrix.arch == 'arm64' && 'ubuntu-22.04-arm' || 'ubuntu-22.04' }}
+
+  test-loong:
+    needs: [build-loong]
+    if: always() && inputs.include-loongarch
+    strategy:
+      fail-fast: false
+      matrix:
+        tier: [micro, base, devel]
+    uses: distrotwin/buildkit/.github/workflows/test-one.yml@caf4911b5a21fde6fa1291b0c186b5e042fe9f49
+    with:
+      distro-id:  v6
+      arch:       loong64
+      tier:       ${{ matrix.tier }}
+      runner:     ubuntu-24.04   # 同上：22.04 的 QEMU 6.2 不支持 LoongArch
+      needs-qemu: true           # 测试阶段也要 docker run 被测镜像，binfmt 两个阶段各需一次
+
+  # expected 是结构性守卫：某个 job 在跑到检查前就挂掉不会产出结果，检查总数会
+  # 「合法地」变低而基线放过它，结果数对不上则一定抓得住。
+  # 勾了 loong 就多三份，所以这个数要跟着算而不是写死。
+  # 首轮先按 12 / 15 份与保守基线跑，绿了之后按实际结果对齐（制度第 9 步）。
+  report:
+    needs: [test, test-loong]
+    if: always()
+    uses: distrotwin/buildkit/.github/workflows/report.yml@caf4911b5a21fde6fa1291b0c186b5e042fe9f49
+    with:
+      distros:  '["v6","v3.4"]'
+      expected: ${{ inputs.include-loongarch && 15 || 12 }}
+      baseline: ${{ inputs.include-loongarch && 560 || 450 }}
+
+  # ── 发布。独立于 build/test，只有显式勾选才跑，且要求 report 真的通过。
+  # 镜像一旦推上 GHCR 就公开可拉，这一步不该由日常构建顺带触发。
+  publish:
+    needs: [test, report]
+    if: inputs.publish && needs.test.result == 'success' && needs.report.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { did: v3.4, prefix: v3.4, tier: micro, latest: false }
+          - { did: v3.4, prefix: v3.4, tier: base,  latest: false }
+          - { did: v3.4, prefix: v3.4, tier: devel, latest: false }
+          - { did: v6,   prefix: v6,   tier: micro, latest: false }
+          - { did: v6,   prefix: v6,   tier: base,  latest: false }
+          # latest 指向最高版本的 devel
+          - { did: v6,   prefix: v6,   tier: devel, latest: true }
+    uses: distrotwin/buildkit/.github/workflows/publish-one.yml@caf4911b5a21fde6fa1291b0c186b5e042fe9f49
+    with:
+      distro-id:  ${{ matrix.did }}
+      tier:       ${{ matrix.tier }}
+      image:      kylinsec
+      tag-prefix: ${{ matrix.prefix }}
+      # V6 三架构，V3.4 只有两架构（源里没有 loong 树）
+      arches:     ${{ inputs.include-loongarch && matrix.did == 'v6' && 'amd64 arm64 loong64' || 'amd64 arm64' }}
+      latest:     ${{ matrix.latest }}
