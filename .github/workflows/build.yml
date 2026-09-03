@@ -113,8 +113,10 @@ jobs:
     uses: distrotwin/buildkit/.github/workflows/report.yml@e1e651889143c7d115e6aa0e29bce24dd2c66659
     with:
       distros:  '["v6","v3.4"]'
+      # 实测值：含 loong 时 15 份结果、637 项检查（v6 九个镜像 381 项、v3.4 六个 256 项）；
+      # 不含 loong 时 12 份、约 509 项。基线取略低于实测的地板，掉下去说明有检查消失了。
       expected: ${{ inputs.include-loongarch && 15 || 12 }}
-      baseline: ${{ inputs.include-loongarch && 560 || 450 }}
+      baseline: ${{ inputs.include-loongarch && 620 || 495 }}
 
   # ── 发布。独立于 build/test，只有显式勾选才跑，且要求 report 真的通过。
   # 镜像一旦推上 GHCR 就公开可拉，这一步不该由日常构建顺带触发。

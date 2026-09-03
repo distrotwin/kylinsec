@@ -1,6 +1,6 @@
 # 麒麟信安桌面操作系统 · 构建与测试镜像
 
-对着麒麟信安公开 rpm 源自举出来的容器环境，用于**软件构建、打包与兼容性测试**。两个桌面大版本、三个档位，覆盖 amd64 / arm64 / LoongArch 新世界，公开在 GHCR。
+对着麒麟信安公开 rpm 源自举出来的容器环境，用于**软件构建、打包与兼容性测试**。两个桌面大版本、三个档位，覆盖 amd64 / arm64 / LoongArch 新世界，公开在 GHCR。最近一轮 15 个镜像、637 项检查全部通过，零异常。
 
 ```bash
 docker run --rm ghcr.io/distrotwin/kylinsec:v6-devel \
@@ -137,7 +137,7 @@ docker run --rm --privileged -v "$PWD:/w" -e http_proxy= -e https_proxy= ksbuild
 
 `gh workflow run build.yml --repo distrotwin/kylinsec -f publish=true -f include-loongarch=true`
 
-构建、测试、报告、发布四个阶段。测试在**干净机器**上装载并真正启动镜像——构建阶段的机器状态会掩盖镜像自身的缺陷。
+构建、测试、报告、发布四个阶段。测试在**干净机器**上装载并真正启动镜像——构建阶段的机器状态会掩盖镜像自身的缺陷。最近一轮 15 个镜像、637 项检查：全部通过、零异常、零期望失败。报告与完整日志按系统打包在每次 run 的 artifact 里。
 
 ## 仓库结构
 
