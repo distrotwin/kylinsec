@@ -45,7 +45,7 @@ objdump -T ab | grep -oE 'GLIBC_[0-9.]+' | sort -uV | tail -1
 
 `v6` 是当前在维护的桌面线，也是全线最新的 ABI。`v3.4`（完整版本号 3.4-4A）是上一代，2024-11 起停止更新，留着是因为 glibc 2.28 那一档在现场仍有存量。
 
-**DID 写 `v3.4` 而不是 `v34`**：后者容易被读成比 `v6` 更新的版本，而它是上一代。发布时另带 `v3.4-4a-*` 别名 tag。
+**版本标识写 `v3.4` 而不是 `v34`**：后者容易被读成比 `v6` 更新的版本，而它是上一代。厂商的完整版本号是 3.4-4A，但 tag 上只写 `v3.4`——不额外发一套 `v3.4-4a-*` 别名，那会让 tag 数量翻倍而不增加信息。要确认手上镜像对应哪个具体版本，看 `rpm -q kylinsec-release` 或 `cn.internal.repo-bases` 这个 label（它记着取材的源地址，里面有 `3.4-4A`）。
 
 三个档位：`micro` 只有 libc 与 shell，不带包管理器；`base` 加上 `dnf`、`python3`、网络工具；`devel` 再加 `gcc`、`gcc-c++`、`make`、`rpm-build`。
 
@@ -98,7 +98,6 @@ rpm -E %{dist}                   # 构建标记：.ks6 / .ky3
 ## tag 与钉版
 
 - 滚动 tag：`v6`、`v6-devel`、`v3.4-base`、`latest`（指向 `v6-devel`）
-- 别名 tag：`v3.4-4a-devel` 等，给习惯写完整版本号的人
 - 日期钉版 tag：`v6-devel-YYYYMMDD`，内容不变，用于复现
 
 钉版 tag 是**天粒度**。同一天重复发布会把这个 tag 移到新 digest。
@@ -109,7 +108,7 @@ rpm -E %{dist}                   # 构建标记：.ks6 / .ky3
 docker inspect ghcr.io/distrotwin/kylinsec:v6-devel --format '{{json .Config.Labels}}' | python3 -m json.tool
 ```
 
-`cn.internal.repo-commit` 是构建时这个仓库的 commit；`cn.internal.build-method` 是 `rpmrepo`；`cn.internal.tier` 是档位。
+`cn.internal.repo-commit` 是构建时这个仓库的 commit；`cn.internal.build-method` 是 `rpmrepo`；`cn.internal.tier` 是档位；`cn.internal.repo-bases` 是取材的源地址（含厂商的完整版本号）；`cn.internal.rpm-key-fp` 是验签用的公钥指纹。
 
 ## 已知的怪癖与期望失败
 
